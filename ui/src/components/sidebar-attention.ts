@@ -56,29 +56,15 @@ class SidebarAttention extends OpenClawLightDomElement {
   private panelGeneration = 0;
 
   private readonly subscriptions = new SubscriptionsController(this)
-    .watch(
-      () => this.context?.sidebarAttention,
-      (attention, notify) => attention.subscribe(notify),
-    )
-    .watch(
-      () => this.context?.sessions,
-      (sessions, notify) => sessions.subscribe(notify),
-    )
-    .watch(
-      () => this.context?.agents,
-      (agents, notify) => agents.subscribe(notify),
-    )
-    .watch(
-      () => this.context?.agentIdentity,
-      (agentIdentity, notify) => agentIdentity.subscribe(notify),
-    );
+    .watchStore(() => this.context?.sidebarAttention)
+    .watchStore(() => this.context?.sessions)
+    .watchStore(() => this.context?.agents)
+    .watchStore(() => this.context?.agentIdentity);
 
   override connectedCallback() {
     super.connectedCallback();
     this.mentions =
       this.context?.sidebarAttention.activate(SidebarAttentionStoreController) ?? null;
-    // Idle callbacks can run after the first click on a busy page.
-    this.preloadPanel();
     // Dismissal belongs to the connected Inbox, including while its panel imports.
     document.addEventListener("pointerdown", this.handleOutsideInteraction, true);
     document.addEventListener("keydown", this.handleOutsideInteraction, true);
@@ -295,7 +281,7 @@ class SidebarAttention extends OpenClawLightDomElement {
     if (!this.context) {
       return nothing;
     }
-    const entries = [...(this.context.sidebarAttention.entries ?? [])];
+    const entries = this.context.sidebarAttention.entries;
     if (this.context.gateway.snapshot.phase !== "connected" && entries.length === 0) {
       return nothing;
     }
@@ -344,7 +330,7 @@ class SidebarAttention extends OpenClawLightDomElement {
               entries,
               onApprovalDecision: (event, approvalId, decision) =>
                 void this.decideApproval(event, approvalId, decision),
-              onClose: (restoreFocus) => this.closePanel(restoreFocus),
+              onClose: () => this.closePanel(true),
               onDismiss: (dismissal) => this.context?.sidebarAttention.dismiss(dismissal),
               onKeydown: this.handlePanelKeydown,
               onNavigate: (routeId, options) => {
