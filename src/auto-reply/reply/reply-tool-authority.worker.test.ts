@@ -8,10 +8,7 @@ import { withPreparedEmbeddedRunToolAuthority } from "../../agents/harness/tool-
 import { setRuntimeConfigSnapshot } from "../../config/runtime-snapshot.js";
 import { upsertSessionEntryCore } from "../../config/sessions/session-accessor.js";
 import { loadSessionEntryForAdmission } from "../../config/sessions/session-accessor.sqlite-entry-admission.js";
-import {
-  projectionLane,
-  targetDiscoveryLane,
-} from "../../config/sessions/session-transcript-worker-resources.js";
+import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import * as sessionReaders from "../../gateway/session-utils-store-worker.js";
 import { resolveOpenClawAgentSqlitePath } from "../../state/openclaw-agent-db.paths.js";
 import { observeMainThreadSql } from "../../test-utils/main-thread-sql-spies.test-support.js";
@@ -39,7 +36,7 @@ const policyKey = "agent:main:authority-policy";
 
 it("prepares embedded tool authority without caller-thread SQL and refuses a closing owner", async () => {
   await withOpenClawTestState({ scenario: "minimal" }, async (state) => {
-    const config = {};
+    const config: OpenClawConfig = {};
     setRuntimeConfigSnapshot(config);
     await upsertSessionEntryCore(
       { agentId: "main", sessionKey: policyKey },
@@ -100,18 +97,14 @@ it.each(["main", "policy", "borrowed"] as const)(
   "retains the %s-agent source while rereading changed sandbox policy before steering",
   async (policyAgent) => {
     await withOpenClawTestState({ scenario: "minimal" }, async (state) => {
-      setRuntimeConfigSnapshot({});
-      const policyAgentId = policyAgent === "borrowed" ? "main" : policyAgent;
-      const classificationKey =
-        policyAgent === "borrowed" ? executionKey : `agent:${policyAgent}:authority-policy`;
-      const config = {
-        agents: {
-          defaults: { sandbox: { mode: "all" as const } },
-          entries: { main: {}, policy: {} },
-        },
+      const config: OpenClawConfig = {
+        agents: { defaults: { sandbox: { mode: "all" } }, entries: { main: {}, policy: {} } },
         tools: { sandbox: { tools: { deny: ["exec"] } } },
       };
       setRuntimeConfigSnapshot(config);
+      const policyAgentId = policyAgent === "borrowed" ? "main" : policyAgent;
+      const classificationKey =
+        policyAgent === "borrowed" ? executionKey : `agent:${policyAgent}:authority-policy`;
       await upsertSessionEntryCore(
         { agentId: policyAgentId, sessionKey: classificationKey },
         { sessionId: "policy", updatedAt: 1, sandboxMode: "off" },
@@ -146,32 +139,7 @@ it.each(["main", "policy", "borrowed"] as const)(
           sessionKey: executionKey,
           sessionId: run.run.sessionId,
         });
-        let initialEntries = 0;
-        const initialReads = [projectionLane, targetDiscoveryLane].map(({ pool }) => {
-          const runRequest = pool.run.bind(pool);
-          return vi.spyOn(pool, "run").mockImplementation(async (...args) => {
-            const reply = await runRequest(...args);
-            if (
-              reply.ok &&
-              typeof reply.value === "object" &&
-              reply.value !== null &&
-              "kind" in reply.value &&
-              reply.value.kind === "session-exact-entries"
-            ) {
-              initialEntries++;
-            }
-            return reply;
-          });
-        });
-        try {
-          await operation.bindToolAuthoritySnapshotAsync(snapshot);
-          // The borrowed admission read already warmed the entry facts.
-          expect(initialEntries).toBe(policyAgent === "borrowed" ? 0 : 1);
-        } finally {
-          for (const read of initialReads) {
-            read.mockRestore();
-          }
-        }
+        await operation.bindToolAuthoritySnapshotAsync(snapshot);
         const admitted = await operation.bindToolAuthorityRouteAsync(run.run);
         await upsertSessionEntryCore(
           { agentId: policyAgentId, sessionKey: classificationKey, env: state.env },

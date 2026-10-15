@@ -274,6 +274,8 @@ export type ReplyPayloadMetadata = {
   assistantTranscriptOwned?: boolean;
   /** Exact decoration added by normalization, not model-authored text. */
   responsePrefix?: string;
+  /** Exact usage footer appended by the host. */
+  responseUsageLine?: string;
   /** Exact channel/account transform owner that already accepted this payload. */
   channelReplyTransformOwner?: object;
   /** Exact dispatcher that already ran its full normalization before side effects. */
@@ -352,7 +354,11 @@ export type ReplyPayloadMetadata = {
   /** Payload preparation generated this provider error; it is not an authored answer. */
   terminalProviderError?: true;
   /** Model fallback uses observed failure facts, never the displayed wording. */
-  providerFailure?: { reason: FailoverReason | null; rawError?: string };
+  providerFailure?: {
+    reason: FailoverReason | null;
+    rawError?: string;
+    rateLimitRetriesExhausted?: number;
+  };
   /** The warning owner observed this tool failure; presentation text is not evidence. */
   toolErrorWarning?: { toolName: string };
   /** Warning synthesized from an observed tool error after the run produced assistant output. */
